@@ -1,0 +1,14 @@
+{
+    "name": "@nahara/remember",
+    "version": "1.0.0",
+    "fmt": {
+        "lineWidth": 120,
+        "indentWidth": 4
+    },
+    "exports": {
+        ".": "./mod.ts",
+        "./core": "./core.ts",
+        "./disposable": "./disposable.ts",
+        "./fork": "./fork.ts"
+    }
+}
