@@ -1,6 +1,7 @@
 {
     "name": "@nahara/remember",
     "version": "1.0.0",
+    "license": "MIT",
     "fmt": {
         "lineWidth": 120,
         "indentWidth": 4
