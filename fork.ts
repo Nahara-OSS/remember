@@ -4,7 +4,7 @@ import { AsyncThrowable } from "./internal.ts";
 /**
  * Create a new fork state and return a function that can be used to fork to multiple child scopes. The fork state is
  * typically used together with `remember()`:
- * 
+ *
  * ```typescript
  * remember(forkState)(fork => {
  *     for (const object of objects) {
@@ -12,10 +12,10 @@ import { AsyncThrowable } from "./internal.ts";
  *     }
  * })
  * ```
- * 
+ *
  * At the end of callback, all keys that was previously used but doesn't get use in current invocation will be cleaned
  * up.
- * 
+ *
  * @param signal The abort signal that will be used to dispose all child scopes.
  * @returns A function that can be called to begin forking child scopes.
  */
@@ -50,7 +50,7 @@ export function forkState(signal: AbortSignal): <R>(callback: (fork: ForkFunctio
 }
 
 export type ForkFunction = <P extends unknown[], R>(
-    key: string,
+    key: unknown,
     func: (context: Context, ...params: P) => R,
     ...params: P
 ) => R;
