@@ -1,21 +1,21 @@
 /**
  * The core module for `@nahara/remember`.
- * 
+ *
  * **Memoizing**: The one and only recommended use case for `remember()` is to memoize values - it is literally there in
  * the name. The context only provides `remember()` and `rememberAsync()` - the rest of module relies on these 2
  * functions. Memoizing typically used to optimize performance, where a calculation is so heavy that it should onlt be
  * called once. However, caching the value is not the only use case for `remember()`, but it can also be used to
  * allocate resources exactly once for given combination of dependencies.
- * 
+ *
  * ```typescript
  * function renderer({ remember }: Context, state: ObjectState) {
  *     const buffer = remember(withRelease(() => device.createBuffer({ ...options }), x => x.close()), [state.url]);
  * }
  * ```
- * 
+ *
  * From the example above, `device.createBuffer()` will only be called once until `state.url` changed to different
  * value. When that happened, the `GPUBuffer` will be closed.
- * 
+ *
  * @module
  */
 
@@ -74,6 +74,21 @@ export interface Context {
      * @param deps A list of dependencies that will be used to track whether the factory should be evaluated again.
      */
     rememberAsync<T>(factory: AsyncFactory<T>, deps?: unknown[]): T;
+
+    /**
+     * Invoke the function using this context. Typically used with destructor:
+     *
+     * ```typescript
+     * function main({ use }: Context, device: GPUDevice, source: GPUTexture, target: GPUTexture) {
+     *     const blit = use(utils.blit, device, source);
+     *     blit(target);
+     * }
+     * ```
+     *
+     * @param func The function that will be invoked.
+     * @param params A list of parameters to pass to function.
+     */
+    use<P extends unknown[], R>(func: (context: Context, ...params: P) => R, ...params: P): R;
 }
 
 /**
@@ -139,38 +154,43 @@ export class Scope implements Disposable {
     invoke<P extends unknown[], R>(func: (context: Context, ...params: P) => R, ...params: P): InvokeResult<R> {
         try {
             let counter = 0;
-            const result = func({
-                remember: <T>(factory: Factory<T>, deps = []) =>
-                    this.#handleRemember(counter++, deps, (controller) => {
-                        try {
-                            return {
-                                stage: "done",
-                                controller,
-                                value: factory(controller.signal),
-                                deps,
-                            };
-                        } catch (e) {
-                            return {
-                                stage: "error",
-                                controller,
-                                error: e,
-                                deps,
-                            };
-                        }
-                    }),
-                rememberAsync: (factory, deps = []) => {
-                    const id = counter++;
+            const context: Partial<Context> = {};
 
-                    return this.#handleRemember(id, deps, (controller) => ({
-                        stage: "wait",
-                        controller,
-                        deps,
-                        task: factory(controller.signal)
-                            .then((value) => this.#hooks.set(id, { stage: "done", controller, deps, value }))
-                            .catch((error) => this.#hooks.set(id, { stage: "error", controller, deps, error })),
-                    }));
-                },
-            }, ...params);
+            context.remember = <T>(factory: Factory<T>, deps = []) =>
+                this.#handleRemember(counter++, deps, (controller) => {
+                    try {
+                        return {
+                            stage: "done",
+                            controller,
+                            value: factory(controller.signal),
+                            deps,
+                        };
+                    } catch (e) {
+                        return {
+                            stage: "error",
+                            controller,
+                            error: e,
+                            deps,
+                        };
+                    }
+                });
+
+            context.rememberAsync = (factory, deps = []) => {
+                const id = counter++;
+
+                return this.#handleRemember(id, deps, (controller) => ({
+                    stage: "wait",
+                    controller,
+                    deps,
+                    task: factory(controller.signal)
+                        .then((value) => this.#hooks.set(id, { stage: "done", controller, deps, value }))
+                        .catch((error) => this.#hooks.set(id, { stage: "error", controller, deps, error })),
+                }));
+            };
+
+            context.use = (func, ...params) => func(context as Context, ...params);
+
+            const result = func(context as Context, ...params);
             return { type: "done", value: result };
         } catch (e) {
             if (e instanceof AsyncThrowable) return { type: "promise", task: e.promise };
